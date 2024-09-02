@@ -29,8 +29,10 @@
 #error "OS Not Supported"
 #endif
 
-#define NUM_LEIT 20 /* Número de Threads de Leitura */
-#define NUM_ESCR 5  /* Número de Threads de Escrita */
+/* Número de Threads de Leitura */
+#define NUM_LEIT 20
+/* Número de Threads de Escrita */
+#define NUM_ESCR 5
 
 pthread_mutex_t mutex_m, leitura_m, inanicao_m; /* Mutexs para sessões */
 pthread_cond_t anti_inanicao_cond;              /* Variável condiconal da mutex */

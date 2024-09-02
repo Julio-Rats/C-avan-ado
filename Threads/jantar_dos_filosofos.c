@@ -29,9 +29,12 @@
 #error "OS Not Supported"
 #endif
 
-#define NUM_FILOSOFOS  5  /* Número de Filósofos na mesa */
-#define LIMIT_JANTAS  10  /* "Jantares" executadas por cada Thread antes de finalizar */
-#define TEMPO_COMER   70  /* Tempo que gasta para "comer" em ms */
+/* Número de Filósofos na mesa */
+#define NUM_FILOSOFOS  5
+/* "Jantares" executadas por cada Thread antes de finalizar */
+#define LIMIT_JANTAS  10
+/* Tempo que gasta para "comer" em ms */
+#define TEMPO_COMER   70
 
 pthread_mutex_t mutex_m;                  /* Sessão Critica acesso as hashis */
 pthread_cond_t hashi_cond[NUM_FILOSOFOS]; /* Condicional para travar e devolver a mutex na falha de pegar hashi */

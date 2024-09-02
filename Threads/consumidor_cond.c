@@ -31,11 +31,16 @@
 #endif
 
 /* Um elemento será inutilizável para distinguir vazio e cheio.  */
-#define MAX_PROD    21 /* Número de slots disponíveis pra produzir (buffer size)  */
-#define LIMIT_PROD  10 /* Limite de produtos produzidos por cada produtor (produção por thread antes de morrer) */
 
-#define NUM_PROD    4  /* Número de Thread rodando função 'void *produtor(void)'       */
-#define NUM_CONS    12 /* Número de Thread rodando função 'void *consumidor(void)'     */
+/* Número de slots disponíveis pra produzir (buffer size)  */
+#define MAX_PROD    21
+/* Limite de produtos produzidos por cada produtor (produção por thread antes de morrer) */
+#define LIMIT_PROD  10
+
+/* Número de Thread rodando função 'void *produtor(void)'       */
+#define NUM_PROD    4
+/* Número de Thread rodando função 'void *consumidor(void)'     */
+#define NUM_CONS    12
 
 pthread_mutex_t mutex_m, fim_m;      /* Sessão Critica acesso ao vetor 'produtos' e variáveis de índices */
 pthread_cond_t prod_cond, cons_cond; /* Índices de controle dos produtores e consumidores sobre o vetor 'produtos' */
