@@ -29,17 +29,17 @@
 #error "OS Not Supported"
 #endif
 
-#define NUM_FILOSOFOS 5 /* Número de Filósofos na mesa */
-#define LIMIT_JANTAS 10 /* "Jantas" executada por cada Thread antes de finalizar */
+#define NUM_FILOSOFOS  5  /* Número de Filósofos na mesa */
+#define LIMIT_JANTAS  10  /* "Jantares" executadas por cada Thread antes de finalizar */
+#define TEMPO_COMER   70  /* Tempo que gasta para "comer" em ms */
 
 pthread_mutex_t mutex_m;                  /* Sessão Critica acesso as hashis */
 pthread_cond_t hashi_cond[NUM_FILOSOFOS]; /* Condicional para travar e devolver a mutex na falha de pegar hashi */
 
-size_t hashi[NUM_FILOSOFOS];  /* vetor binário simulando disponibilidade dos hashis */
-size_t jantas[NUM_FILOSOFOS]; /* Contador de "jantas" de cada Thread */
+size_t hashi[NUM_FILOSOFOS]; /* vetor binário simulando disponibilidade dos hashis */
 
-/* Verifica se o hashi está disponível, caso sim reserva ("pega") e retorna 1, caso nao retorna 0*/
-int pega_hashi(size_t pos_filosofo)
+/* Verifica se o hashi está disponível, caso sim reserva ("pega") e retorna 1, caso nao retorna 0 */
+size_t pega_hashi(size_t pos_filosofo)
 {
     if (hashi[pos_filosofo])
     {
@@ -58,14 +58,15 @@ void devolver_hashi(size_t pos_filosofo)
 /* Toma um tempo (pensando...) */
 void pensar(void)
 {
-    sleep(((rand() % 5) + 1) * 100);
+    sleep((rand() % 5 + 1) * 100);
 }
 
 /* Condições de corrida (Func Threads) */
 void *jantar(void *num_filosofo)
 {
-    srand(((size_t)time(NULL)) + (*((size_t *)num_filosofo)) * 12345);
-    for (;;)
+    size_t jantares = 0;
+    srand((size_t)time(NULL) + (*(size_t *)num_filosofo + 1) * 60);
+    while (1)
     {
         /* Pensa (Delay) */
         pensar();
@@ -77,14 +78,16 @@ void *jantar(void *num_filosofo)
             espera (wait) do mesmo até ser liberado pelo filosofo que
             está utilizando.
         */
-        while (pega_hashi(*((size_t *)num_filosofo)) == 0)
+        while (pega_hashi(*(size_t *)num_filosofo) == 0)
         {
             /* Hashi ocupado fica esperando o Filosofo devolver o hashi a "mesa" */
-            pthread_cond_wait(&hashi_cond[*((size_t *)num_filosofo)], &mutex_m);
+            pthread_cond_wait(&hashi_cond[*(size_t *)num_filosofo], &mutex_m);
         }
         /* Fim sessão critica acesso aos hashis */
         pthread_mutex_unlock(&mutex_m);
+
         // tempo para preempção
+
         /* Sessão critica acesso aos hashis */
         pthread_mutex_lock(&mutex_m);
         /*
@@ -93,10 +96,10 @@ void *jantar(void *num_filosofo)
             caso não ele devolve o da direita e volta a tentar novamente
             a pegar ambos hashi (Necessario a devolução para evitar deadlock).
         */
-        if (pega_hashi((*((size_t *)num_filosofo) + 1) % NUM_FILOSOFOS) == 0)
+        if (pega_hashi((*(size_t *)num_filosofo + 1) % NUM_FILOSOFOS) == 0)
         {
             /* Falhou em pegar Hashi da direita, devolve o da esqueda */
-            devolver_hashi(*((size_t *)num_filosofo));
+            devolver_hashi(*(size_t *)num_filosofo);
             /* Livra a mutex e volta a pensar */
             pthread_mutex_unlock(&mutex_m);
             continue;
@@ -104,33 +107,36 @@ void *jantar(void *num_filosofo)
         /* Fim sessão critica acesso aos hashis */
         pthread_mutex_unlock(&mutex_m);
 
+        /* Incremento de jantares */
+        jantares++;
         /* Filosofo Comendo*/
-        printf("Filosofo comendo: %ld\n", *((size_t *)num_filosofo) + 1);
-        /* Incremento de jantas */
-        jantas[*((size_t *)num_filosofo)]++;
+        printf("Filosofo %02ld comendo pela %02ld vez\n", *(size_t *)num_filosofo + 1, jantares);
+        sleep(TEMPO_COMER); // Delay simulando o consumo da thread
 
         /* Sessão critica acesso aos hashis */
         pthread_mutex_lock(&mutex_m);
         /* Devolve hashi da esquerda*/
-        devolver_hashi(*((size_t *)num_filosofo));
-        /* Fim sessão critica acesso aos hashis */
-        pthread_mutex_unlock(&mutex_m);
-        // tempo para preempção
-        /* Sessão critica acesso aos hashis */
-        pthread_mutex_lock(&mutex_m);
-        /* Devolve hashi da direita */
-        devolver_hashi((*((size_t *)num_filosofo) + 1) % NUM_FILOSOFOS);
-        /* Sinaliza que o hashi da esquerda do filosofo a direita do atual está livre agora */
-        pthread_cond_signal(&hashi_cond[(*((size_t *)num_filosofo) + 1) % NUM_FILOSOFOS]);
+        devolver_hashi(*(size_t *)num_filosofo);
         /* Fim sessão critica acesso aos hashis */
         pthread_mutex_unlock(&mutex_m);
 
-        /* Caso tenha atingido o limite de jantas encerra */
-        if (jantas[*((size_t *)num_filosofo)] == LIMIT_JANTAS)
+        // tempo para preempção
+
+        /* Sessão critica acesso aos hashis */
+        pthread_mutex_lock(&mutex_m);
+        /* Devolve hashi da direita */
+        devolver_hashi((*(size_t *)num_filosofo + 1) % NUM_FILOSOFOS);
+        /* Sinaliza que o hashi da esquerda do filosofo a direita do atual está livre agora */
+        pthread_cond_signal(&hashi_cond[(*(size_t *)num_filosofo + 1) % NUM_FILOSOFOS]);
+        /* Fim sessão critica acesso aos hashis */
+        pthread_mutex_unlock(&mutex_m);
+
+        /* Caso tenha atingido o limite de jantares encerra */
+        if (jantares == LIMIT_JANTAS)
             break;
     }
-    /* Printa antes de sair que está satisfeito (chegou ao limite de jantas) */
-    printf("Filosofo %02ld esta satisfeito !\n", *((size_t *)num_filosofo) + 1);
+    /* Printa antes de sair que está satisfeito (chegou ao limite de jantares) */
+    printf("Filosofo %02ld esta satisfeito !\n", *(size_t *)num_filosofo + 1);
 }
 
 int main(int argc, char const *argv[])
@@ -153,7 +159,7 @@ int main(int argc, char const *argv[])
     for (size_t i = 0; i < NUM_FILOSOFOS; i++)
         pthread_cond_init((hashi_cond + i), NULL);
 
-    printf("Jantar esta servido...\n");
+    printf("O jantar esta servido...\n\n");
 
     /* Inicialização das Threads (inicia condições de corrida) */
     for (size_t i = 0; i < NUM_FILOSOFOS; i++)
@@ -166,7 +172,7 @@ int main(int argc, char const *argv[])
     for (size_t i = 0; i < NUM_FILOSOFOS; i++)
         pthread_join(filosofo_thread[i], NULL);
 
-    printf("Fim\n");
+    printf("\nFim\n");
 
     return 0;
 }

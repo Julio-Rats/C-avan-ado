@@ -31,30 +31,29 @@
 #endif
 
 /* Um elemento será inutilizável para distinguir vazio e cheio.  */
-#define MAX_PROD 21   /* Número de slots disponíveis pra produzir (buffer size)  */
-#define LIMIT_PROD 10 /* Limite de produtos produzidos por cada produtor (produção por thread antes de morrer) */
+#define MAX_PROD    21 /* Número de slots disponíveis pra produzir (buffer size)  */
+#define LIMIT_PROD  10 /* Limite de produtos produzidos por cada produtor (produção por thread antes de morrer) */
 
-#define NUM_PROD 5  /* Número de Thread rodando função 'void *produtor(void)'       */
-#define NUM_CONS 17 /* Número de Thread rodando função 'void *consumidor(void)'     */
+#define NUM_PROD    4  /* Número de Thread rodando função 'void *produtor(void)'       */
+#define NUM_CONS    12 /* Número de Thread rodando função 'void *consumidor(void)'     */
 
 pthread_mutex_t mutex_m, fim_m;      /* Sessão Critica acesso ao vetor 'produtos' e variáveis de índices */
 pthread_cond_t prod_cond, cons_cond; /* Índices de controle dos produtores e consumidores sobre o vetor 'produtos' */
 
-unsigned int len_cons = 0; /* Índice de consumo no vetor 'produtos' (sessão critica) */
-unsigned int len_prod = 0; /* Índice de produção no vetor 'produtos' (sessão critica) */
+size_t len_cons = 0; /* Índice de consumo no vetor 'produtos' (sessão critica) */
+size_t len_prod = 0; /* Índice de produção no vetor 'produtos' (sessão critica) */
 
-unsigned char fim_flag = 0; /* Flag para encerrar consumidores (fim de todo consumo e fim dos produtores) */
+size_t fim_flag = 0; /* Flag para encerrar consumidores (fim de todo consumo e fim dos produtores) */
 
-unsigned int prod_cont[NUM_PROD]; /* Número de produtos produzido por cada thread produtora */
-
-int produtos[MAX_PROD]; /* Vetor de produção (sessão critica) */
+size_t produtos[MAX_PROD]; /* Vetor de produção (sessão critica) */
 
 void *produtor(void *num_thread)
 {
-    srand(((size_t)time(NULL)) + (*((size_t *)num_thread)) * 54321);
-    for (;;)
+    srand((size_t)time(NULL) + (*(size_t *)num_thread + 1) * 60);
+    size_t prod_cont = 0;
+    while (1)
     {
-        sleep(((rand() % 5) + 1) * 100);
+        sleep((rand() % 3 + 1) * 100);
 
         /* Sessão critica (Exclusão Mútua)*/
         pthread_mutex_lock(&mutex_m);
@@ -65,21 +64,19 @@ void *produtor(void *num_thread)
 
         /* Inserindo um valor aleatório entre 1 e 99 (simulando a produção) */
         produtos[len_prod] = rand() % 99 + 1;
+        prod_cont++;
         printf("Produzindo: %02d, Pos: %02d, Thread: %02ld (%02d/%02d)\n", produtos[len_prod],
-               len_prod, *((size_t *)num_thread) + 1, prod_cont[*((size_t *)num_thread)] + 1, LIMIT_PROD);
+               len_prod + 1, *(size_t *)num_thread + 1, prod_cont, LIMIT_PROD);
         len_prod = (len_prod + 1) % MAX_PROD;
-
-        /* Contador de produção dessa Thread */
-        prod_cont[*((size_t *)num_thread)]++;
 
         /* Produção inserida (libera pelo menos um consumidor) */
         pthread_cond_signal(&cons_cond);
 
         /* Verifica limite de produção */
-        if (prod_cont[*((size_t *)num_thread)] == LIMIT_PROD)
+        if (prod_cont == LIMIT_PROD)
         {
             pthread_mutex_unlock(&mutex_m);
-            printf("Fim do produtor: %02ld\n", *((size_t *)num_thread) + 1);
+            printf("Fim do produtor: %02ld\n", *(size_t *)num_thread + 1);
             pthread_exit(NULL);
             return NULL; /*opcional*/
         }
@@ -91,10 +88,11 @@ void *produtor(void *num_thread)
 
 void *consumidor(void *num_thread)
 {
-    srand(((size_t)time(NULL)) + (*(size_t *)num_thread) * 12345);
-    for (;;)
+    srand((size_t)time(NULL) - (*(size_t *)num_thread + 1) * 60);
+    size_t cons_cont = 0;
+    while (1)
     {
-        sleep(((rand() % 5) + 1) * 100);
+        sleep((rand() % 4 + 2) * 100);
 
         /* Sessão critica (Exclusão Mútua)*/
         pthread_mutex_lock(&mutex_m);
@@ -108,19 +106,20 @@ void *consumidor(void *num_thread)
             {
                 pthread_mutex_unlock(&fim_m);
                 pthread_mutex_unlock(&mutex_m);
-                printf("Fim do consumidor: %02ld\n", (*(size_t *)num_thread) + 1);
+                printf("Fim do consumidor: %02ld (%02ld)\n", *(size_t *)num_thread + 1, cons_cont);
                 pthread_exit(NULL);
                 return NULL; /*opcional*/
             }
-            printf("Consumidor %d travado\n", (*(size_t *)num_thread) + 1);
+            printf("Consumidor %02ld travado\n", *(size_t *)num_thread + 1);
             pthread_mutex_unlock(&fim_m);
             /* Aguarda produção (Produtores existentes ainda) */
             pthread_cond_wait(&cons_cond, &mutex_m);
         }
 
         /* Consumindo (simulando o consumo) */
-        printf("Consumindo: %02d, pos: %02d, Thread: %02ld\n", produtos[len_cons],
-               len_cons, (*(size_t *)num_thread) + 1);
+        cons_cont++;
+        printf("Consumindo: %02d, pos: %02d, Thread: %02ld (%02ld)\n", produtos[len_cons],
+                len_cons, *(size_t *)num_thread + 1, cons_cont);
         len_cons = (len_cons + 1) % MAX_PROD;
 
         /* Consumido (libera um produtor caso esses já tenham enchido o vetor) */
@@ -142,16 +141,13 @@ int main(int argc, char const *argv[])
     /* Semente aleatória (clock cpu) */
     srand(time(NULL));
 
-    /* Zera contadores dos produtores */
-    memset(prod_cont, 0, sizeof(prod_cont));
-
     /* Inicialização da Mutex e Mutex condicionais */
     pthread_mutex_init(&mutex_m, NULL);
     pthread_mutex_init(&fim_m, NULL);
     pthread_cond_init(&prod_cond, NULL);
     pthread_cond_init(&cons_cond, NULL);
 
-    printf("Inicia...\n");
+    printf("Inicia...\n\n");
 
     /* Inicialização das Threads (inicia condições de corrida) */
     for (size_t i = 0; i < NUM_CONS; i++)
@@ -190,7 +186,7 @@ int main(int argc, char const *argv[])
     for (size_t i = 0; i < NUM_CONS; i++)
         pthread_join(consT[i], NULL);
 
-    printf("Fim\n");
+    printf("\nFim\n");
 
     pthread_mutex_destroy(&mutex_m);
     pthread_mutex_destroy(&fim_m);

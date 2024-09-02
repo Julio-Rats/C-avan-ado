@@ -30,21 +30,21 @@
 #endif
 
 #define NUM_LEIT 20 /* Número de Threads de Leitura */
-#define NUM_ESCR 4  /* Número de Threads de Escrita */
+#define NUM_ESCR 5  /* Número de Threads de Escrita */
 
-pthread_mutex_t mutex_m, leitura_m, inanicao_m; /* Mutexs para sessões*/
+pthread_mutex_t mutex_m, leitura_m, inanicao_m; /* Mutexs para sessões */
 pthread_cond_t anti_inanicao_cond;              /* Variável condiconal da mutex */
 
 unsigned int num_leitores = 0; /* Número de leitores ativos */
-unsigned int locket_flag = 0;  /* Trava para priorizar escritores */
-unsigned int critico = 0;      /* Simulando memoria critica compartilhada */
+unsigned int locket_flag  = 0; /* Trava para priorizar escritores */
+unsigned int critico      = 0; /* Simulando memoria critica compartilhada */
 
 void *leitor(void *num_thread)
 {
-    srand(time(NULL) + (*((size_t *)num_thread)) * 12345);
-    for (;;)
+    srand((size_t)time(NULL) + (*(size_t *)num_thread + 1) * 60);
+    while (1)
     {
-        sleep(((rand() % 5) + 5) * 100);
+        sleep((rand() % 3 + 3) * 100);
 
         /* Sessão critica da variavel locket_flag */
         pthread_mutex_lock(&inanicao_m);
@@ -60,6 +60,7 @@ void *leitor(void *num_thread)
         while (locket_flag)
         {
             /* Leitores esperam até não ter mais escritores ativos */
+            printf("Leitor aguardando: %02ld\n", *(size_t *)num_thread);
             pthread_cond_wait(&anti_inanicao_cond, &inanicao_m);
         }
         /* Fim sessão critica da variavel locket_flag */
@@ -77,7 +78,7 @@ void *leitor(void *num_thread)
         pthread_mutex_unlock(&leitura_m);
 
         /* Simulando Leitura */
-        printf("Ler critico: %d (%ld)\n", critico, *((size_t *)num_thread));
+        printf("Ler critico: %02d (%02ld)\n", critico, *(size_t *)num_thread);
 
         /* Sessão critica da variavel num_leitores */
         pthread_mutex_lock(&leitura_m);
@@ -94,10 +95,10 @@ void *leitor(void *num_thread)
 
 void *escritor(void *num_thread)
 {
-    srand(time(NULL) + (*((size_t *)num_thread)) * 54321);
-    for (;;)
+    srand((size_t)time(NULL) - (*(size_t *)num_thread + 1) * 60);
+    while (1)
     {
-        sleep(((rand() % 5) + 5) * 100);
+        sleep((rand() % 3 + 1) * 100);
 
         /* Sessão critica da variavel locket_flag */
         pthread_mutex_lock(&inanicao_m);
@@ -106,6 +107,7 @@ void *escritor(void *num_thread)
             Incrementa igualmente ao número de escritores ativos assim
             leitores esperam até todos escritores deixar sessão critica.
         */
+        printf("Novo Escritor: %02ld\n", *(size_t *)num_thread);
         locket_flag++;
         /* Fim sessão critica da variavel locket_flag */
         pthread_mutex_unlock(&inanicao_m);
@@ -113,8 +115,8 @@ void *escritor(void *num_thread)
         /* Sessão critica da variavel critico */
         pthread_mutex_lock(&mutex_m);
         /* Simula escrita com número aleatorio de 1 a 100 */
-        critico = (rand() % 100) + 1;
-        printf("Escreve critico: %d (%ld)\n", critico, *((size_t *)num_thread));
+        critico = rand() % 99 + 1;
+        printf("Escreve critico: %02d (%02ld)\n", critico, *(size_t *)num_thread);
         /* Fim sessão critica da variavel critico */
         pthread_mutex_unlock(&mutex_m);
 
@@ -130,6 +132,7 @@ void *escritor(void *num_thread)
             /* Libera todos leitores esperando em fila */
             pthread_cond_broadcast(&anti_inanicao_cond);
         }
+        printf("Fim do Escritor: %02ld\n", *(size_t *)num_thread);
         /* Fim sessão critica da variavel locket_flag */
         pthread_mutex_unlock(&inanicao_m);
     }
@@ -151,7 +154,7 @@ int main(int argc, char const *argv[])
     pthread_mutex_init(&inanicao_m, NULL);
     pthread_cond_init(&anti_inanicao_cond, NULL);
 
-    printf("Começo\n");
+    printf("Comeco\n");
 
     /* Inicialização das Threads (inicia condições de corrida) */
     for (size_t i = 0; i < NUM_ESCR; i++)
