@@ -124,7 +124,7 @@ void *consumidor(void *num_thread)
         /* Consumindo (simulando o consumo) */
         cons_cont++;
         printf("Consumindo: %02d, pos: %02d, Thread: %02ld (%02ld)\n", produtos[len_cons],
-                len_cons, *(size_t *)num_thread + 1, cons_cont);
+                len_cons + 1, *(size_t *)num_thread + 1, cons_cont);
         len_cons = (len_cons + 1) % MAX_PROD;
 
         /* Consumido (libera um produtor caso esses já tenham enchido o vetor) */
