@@ -34,30 +34,29 @@
 /* Número de Threads de Escrita */
 #define NUM_ESCR 5
 
+
 pthread_mutex_t mutex_m, leitura_m, inanicao_m; /* Mutexs para sessões */
-pthread_cond_t anti_inanicao_cond;              /* Variável condiconal da mutex */
+pthread_cond_t anti_inanicao_cond;              /* Variável condicional da mutex */
 
 unsigned int num_leitores = 0; /* Número de leitores ativos */
 unsigned int locket_flag  = 0; /* Trava para priorizar escritores */
 unsigned int critico      = 0; /* Simulando memoria critica compartilhada */
 
+
 void *leitor(void *num_thread)
 {
+    /* Semente aleatória para essa Thread (horas mais múltiplos de 60) */
     srand((size_t)time(NULL) + (*(size_t *)num_thread + 1) * 60);
     while (1)
     {
         sleep((rand() % 3 + 3) * 100);
 
-        /* Sessão critica da variavel locket_flag */
+        /* Sessão critica da variável locket_flag */
         pthread_mutex_lock(&inanicao_m);
         /*
             Caso exista um novo escritor, trava a entrada de novos leitores
             Aqui irá manter novos leitores esperando, enquanto as ativas
             continuem até sair.
-        */
-        /*
-            While para evitar falsos Signals e possíveis novos escritores após último sair, e
-            leitores não conseguirem sair do wait a tempo (conflito de preempção).
         */
         while (locket_flag)
         {
@@ -65,10 +64,10 @@ void *leitor(void *num_thread)
             printf("Leitor aguardando: %02ld\n", *(size_t *)num_thread);
             pthread_cond_wait(&anti_inanicao_cond, &inanicao_m);
         }
-        /* Fim sessão critica da variavel locket_flag */
+        /* Fim sessão critica da variável locket_flag */
         pthread_mutex_unlock(&inanicao_m);
 
-        /* Sessão critica da variavel num_leitores */
+        /* Sessão critica da variável num_leitores */
         pthread_mutex_lock(&leitura_m);
         /* Caso seja o primeiro leitor bloqueia a mutex de escrita */
         if (++num_leitores == 1)
@@ -76,13 +75,13 @@ void *leitor(void *num_thread)
             /* Bloqueia escritores */
             pthread_mutex_lock(&mutex_m);
         }
-        /* Fim sessão critica da variavel num_leitores */
+        /* Fim sessão critica da variável num_leitores */
         pthread_mutex_unlock(&leitura_m);
 
         /* Simulando Leitura */
         printf("Ler critico: %02d (%02ld)\n", critico, *(size_t *)num_thread);
 
-        /* Sessão critica da variavel num_leitores */
+        /* Sessão critica da variável num_leitores */
         pthread_mutex_lock(&leitura_m);
         /* Último leitor ativo ao sair libera os escritores */
         if (--num_leitores == 0)
@@ -90,19 +89,20 @@ void *leitor(void *num_thread)
             /* Destrava os escritores */
             pthread_mutex_unlock(&mutex_m);
         }
-        /* Fim sessão critica da variavel num_leitores */
+        /* Fim sessão critica da variável num_leitores */
         pthread_mutex_unlock(&leitura_m);
     }
 }
 
 void *escritor(void *num_thread)
 {
+    /* Semente aleatória para essa Thread (horas menos múltiplos de 60) */
     srand((size_t)time(NULL) - (*(size_t *)num_thread + 1) * 60);
     while (1)
     {
         sleep((rand() % 3 + 1) * 100);
 
-        /* Sessão critica da variavel locket_flag */
+        /* Sessão critica da variável locket_flag */
         pthread_mutex_lock(&inanicao_m);
         /*
             Flag não binaria (0 == Falso, caso contrario é Verdadeiro)
@@ -111,21 +111,32 @@ void *escritor(void *num_thread)
         */
         printf("Novo Escritor: %02ld\n", *(size_t *)num_thread);
         locket_flag++;
-        /* Fim sessão critica da variavel locket_flag */
-        pthread_mutex_unlock(&inanicao_m);
 
-        /* Sessão critica da variavel critico */
+        /* 
+            Sessão critica da variável critico 
+             Com essa lock dentro da lock do inanicao_m garantimos
+             que mais de um escritor pode entrar e travar os leitores
+             porém a ordem em que cada um consegue a lock inanicao_m
+             vai ser a ordem de escrita no critico 
+
+            Assim evita ultrapassagem de um escritor por outro, porém não
+             trata starvation (inanição) entre escritores
+        */
         pthread_mutex_lock(&mutex_m);
-        /* Simula escrita com número aleatorio de 1 a 100 */
+
+        /* Fim sessão critica da variável locket_flag */
+        pthread_mutex_unlock(&inanicao_m);
+        
+        /* Simula escrita com número aleatório de 1 a 100 */
         critico = rand() % 99 + 1;
         printf("Escreve critico: %02d (%02ld)\n", critico, *(size_t *)num_thread);
-        /* Fim sessão critica da variavel critico */
+        /* Fim sessão critica da variável critico */
         pthread_mutex_unlock(&mutex_m);
 
         /* Sessão critica da variavel locket_flag */
         pthread_mutex_lock(&inanicao_m);
         /*
-            Decrementa variavel locket_flag, caso
+            Decrementa variável locket_flag, caso
             seja o último escritor ativo, libera variável
             condicional da mutex (Trava de novos leitores).
         */
@@ -135,16 +146,18 @@ void *escritor(void *num_thread)
             pthread_cond_broadcast(&anti_inanicao_cond);
         }
         printf("Fim do Escritor: %02ld\n", *(size_t *)num_thread);
-        /* Fim sessão critica da variavel locket_flag */
+        /* Fim sessão critica da variável locket_flag */
         pthread_mutex_unlock(&inanicao_m);
     }
 }
 
 int main(int argc, char const *argv[])
 {
+    /* Variável para iterações no FOR */
+    size_t i;
     /* Threads de escritores e leitores */
     pthread_t esc_trd[NUM_ESCR], lei_trd[NUM_LEIT];
-    /* enumerador das Threas */
+    /* Enumerador das Threads */
     size_t num_esc[NUM_ESCR], num_lei[NUM_LEIT];
 
     /* Semente aleatória (clock cpu) */
@@ -159,26 +172,26 @@ int main(int argc, char const *argv[])
     printf("Comeco\n");
 
     /* Inicialização das Threads (inicia condições de corrida) */
-    for (size_t i = 0; i < NUM_ESCR; i++)
+    for (i = 0; i < NUM_ESCR; i++)
     {
         /* somente para enumerar cada Thread */
         num_esc[i] = i + 1;
         pthread_create((esc_trd + i), NULL, (void *)&escritor, (void *)(num_esc + i));
     }
-    for (size_t i = 0; i < NUM_LEIT; i++)
+    for (i = 0; i < NUM_LEIT; i++)
     {
         /* somente para enumerar cada Thread */
         num_lei[i] = i + 1;
         pthread_create((lei_trd + i), NULL, (void *)&leitor, (void *)(num_lei + i));
     }
 
-    /* Aguardando Threas (NÃO ALCANÇÁVEIS NESSE EXEMPLO)*/
-    for (size_t i = 0; i < NUM_ESCR; i++)
+    /* Aguardando Threads (NÃO ALCANÇÁVEIS NESSE EXEMPLO)*/
+    for (i = 0; i < NUM_ESCR; i++)
         pthread_join(esc_trd[i], NULL);
-    for (size_t i = 0; i < NUM_LEIT; i++)
+    for (i = 0; i < NUM_LEIT; i++)
         pthread_join(lei_trd[i], NULL);
 
-    printf("Fim\n"); // Nunca será alcançável.
+    printf("Fim\n"); /* Nunca será alcançável. */
 
     return 0;
 }

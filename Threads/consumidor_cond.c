@@ -42,18 +42,20 @@
 /* Número de Thread rodando função 'void *consumidor(void)'     */
 #define NUM_CONS    12
 
+
 pthread_mutex_t mutex_m, fim_m;      /* Sessão Critica acesso ao vetor 'produtos' e variáveis de índices */
 pthread_cond_t prod_cond, cons_cond; /* Índices de controle dos produtores e consumidores sobre o vetor 'produtos' */
 
+size_t produtos[MAX_PROD]; /* Vetor de produção (sessão critica) */
 size_t len_cons = 0; /* Índice de consumo no vetor 'produtos' (sessão critica) */
 size_t len_prod = 0; /* Índice de produção no vetor 'produtos' (sessão critica) */
 
 size_t fim_flag = 0; /* Flag para encerrar consumidores (fim de todo consumo e fim dos produtores) */
 
-size_t produtos[MAX_PROD]; /* Vetor de produção (sessão critica) */
 
 void *produtor(void *num_thread)
 {
+    /* Semente aleatória para essa Thread (horas mais múltiplos de 60) */
     srand((size_t)time(NULL) + (*(size_t *)num_thread + 1) * 60);
     size_t prod_cont = 0;
     while (1)
@@ -77,22 +79,23 @@ void *produtor(void *num_thread)
         /* Produção inserida (libera pelo menos um consumidor) */
         pthread_cond_signal(&cons_cond);
 
+        /* Fim da sessão critica (Exclusão Mútua)*/
+        pthread_mutex_unlock(&mutex_m);
+
         /* Verifica limite de produção */
         if (prod_cont == LIMIT_PROD)
         {
-            pthread_mutex_unlock(&mutex_m);
             printf("Fim do produtor: %02ld\n", *(size_t *)num_thread + 1);
             pthread_exit(NULL);
             return NULL; /*opcional*/
         }
-
-        /* Fim da sessão critica (Exclusão Mútua)*/
-        pthread_mutex_unlock(&mutex_m);
+        
     }
 }
 
 void *consumidor(void *num_thread)
 {
+    /* Semente aleatória para essa Thread (horas menos múltiplos de 60) */
     srand((size_t)time(NULL) - (*(size_t *)num_thread + 1) * 60);
     size_t cons_cont = 0;
     while (1)
@@ -137,14 +140,13 @@ void *consumidor(void *num_thread)
 
 int main(int argc, char const *argv[])
 {
+    /* Variável para iterações com FOR */
+    size_t i;
     /* Threads da produção e consumidores */
     pthread_t prodT[NUM_PROD], consT[NUM_CONS];
 
     /* Enumera cada Thread produtora pra contar produção de cada */
     size_t num_prod_thread[NUM_PROD], num_cons_thread[NUM_CONS];
-
-    /* Semente aleatória (clock cpu) */
-    srand(time(NULL));
 
     /* Inicialização da Mutex e Mutex condicionais */
     pthread_mutex_init(&mutex_m, NULL);
@@ -155,19 +157,19 @@ int main(int argc, char const *argv[])
     printf("Inicia...\n\n");
 
     /* Inicialização das Threads (inicia condições de corrida) */
-    for (size_t i = 0; i < NUM_CONS; i++)
+    for (i = 0; i < NUM_CONS; i++)
     {
         num_cons_thread[i] = i;
         pthread_create((consT + i), NULL, (void *)&consumidor, (void *)(num_cons_thread + i));
     }
-    for (size_t i = 0; i < NUM_PROD; i++)
+    for (i = 0; i < NUM_PROD; i++)
     {
         num_prod_thread[i] = i;
         pthread_create((prodT + i), NULL, (void *)&produtor, (void *)(num_prod_thread + i));
     }
 
     /* Aguarda fim das Threads produtoras */
-    for (size_t i = 0; i < NUM_PROD; i++)
+    for (i = 0; i < NUM_PROD; i++)
         pthread_join(prodT[i], NULL);
 
     /* Sinaliza fim da produção para consumidores */
@@ -182,13 +184,13 @@ int main(int argc, char const *argv[])
     */
     /* Livra possíveis Thread consumidoras do bloqueio de falta de produtos, necessário para finalizarem */
     pthread_mutex_lock(&mutex_m);
-    // Possível condição de corrida (Thread consumidores chegam no wait antes da main setar fim_flag = 1)
+    /* Possível condição de corrida (Thread consumidores chegam no wait antes da main setar fim_flag = 1) */
     pthread_cond_broadcast(&cons_cond);
-    // Caso alguma não tenha chegado ainda no wait, ela irá finalizar antes no if do fim_flag, não travando mais no wait
+    /* Caso alguma não tenha chegado ainda no wait, ela irá finalizar antes no if do fim_flag, não travando mais no wait */
     pthread_mutex_unlock(&mutex_m);
 
     /* Aguarda fim das Threads consumidoras */
-    for (size_t i = 0; i < NUM_CONS; i++)
+    for (i = 0; i < NUM_CONS; i++)
         pthread_join(consT[i], NULL);
 
     printf("\nFim\n");
